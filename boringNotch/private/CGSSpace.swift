@@ -11,6 +11,11 @@
 
 import AppKit
 
+/// Gets the currently active Space ID
+public func getCurrentActiveSpaceID() -> UInt64 {
+    return CGSGetActiveSpace(_CGSDefaultConnection())
+}
+
 /// Small Spaces API wrapper.
 public final class CGSSpace {
     private let identifier: CGSSpaceID
@@ -74,3 +79,5 @@ fileprivate func CGSRemoveWindowsFromSpaces(_ cid: CGSConnectionID, _ windows: N
 fileprivate func CGSHideSpaces(_ cid: CGSConnectionID, _ spaces: NSArray)
 @_silgen_name("CGSShowSpaces")
 fileprivate func CGSShowSpaces(_ cid: CGSConnectionID, _ spaces: NSArray)
+@_silgen_name("CGSGetActiveSpace")
+fileprivate func CGSGetActiveSpace(_ cid: CGSConnectionID) -> CGSSpaceID

@@ -143,7 +143,14 @@ extension Defaults.Keys {
     
         // MARK: Calendar
     static let calendarSelectionState = Key<CalendarSelectionState>("calendarSelectionState", default: .all)
-    
+    static let showNextEventInNotch = Key<Bool>("showNextEventInNotch", default: true)
+
+    // MARK: Desktops
+    static let desktopNames = Key<[String: String]>("desktopNames", default: [:])
+    static let showDesktopName = Key<Bool>("showDesktopName", default: true)
+    static let desktopNameAutoExpandOnNotch = Key<Bool>("desktopNameAutoExpandOnNotch", default: true)
+    static let desktopNameAutoHideDelay = Key<Double>("desktopNameAutoHideDelay", default: 2.0)
+
         // MARK: Fullscreen Media Detection
     static let hideNotchOption = Key<HideNotchOption>("hideNotchOption", default: .nowPlayingOnly)
     

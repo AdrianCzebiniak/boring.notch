@@ -282,9 +282,36 @@ struct EventListView: View {
         Self.filteredEvents(events: events)
     }
 
+    /// Sorts events to prioritize showing the next upcoming event today
+    /// Order: upcoming today → future events → past today → past events
+    private var sortedEvents: [EventModel] {
+        let filtered = filteredEvents
+        let now = Date.now
+        let calendar = Calendar.current
+
+        // Separate events into categories
+        let upcomingToday = filtered.filter { event in
+            calendar.isDateInToday(event.start) && event.start >= now
+        }
+        let pastToday = filtered.filter { event in
+            calendar.isDateInToday(event.start) && event.start < now
+        }
+        let notToday = filtered.filter { event in
+            !calendar.isDateInToday(event.start)
+        }
+
+        // Combine: upcoming events today first (next event appears at top),
+        // then future events from other days, then past events today (dimmed),
+        // finally past events from other days
+        return upcomingToday.sorted { $0.start < $1.start } +
+               notToday.filter { $0.start > now }.sorted { $0.start < $1.start } +
+               pastToday.sorted { $0.start < $1.start } +
+               notToday.filter { $0.start <= now }.sorted { $0.start < $1.start }
+    }
+
     var body: some View {
         List {
-            ForEach(filteredEvents) { event in
+            ForEach(sortedEvents) { event in
                 Button(action: {
                     if let url = event.calendarAppURL() {
                         openURL(url)

@@ -22,14 +22,17 @@ class CalendarManager: ObservableObject {
     @Published var reminderLists: [CalendarModel] = []
     @Published var calendarAuthorizationStatus: EKAuthorizationStatus = .notDetermined
     @Published var reminderAuthorizationStatus: EKAuthorizationStatus = .notDetermined
+    @Published var nextUpcomingEvent: EventModel? = nil
     private var selectedCalendars: [CalendarModel] = []
     private let calendarService = CalendarService()
 
     private var eventStoreChangedObserver: NSObjectProtocol?
+    private var nextEventUpdateTimer: Timer?
 
     private init() {
         self.currentWeekStartDate = CalendarManager.startOfDay(Date())
         setupEventStoreChangedObserver()
+        setupNextEventUpdateTimer()
         Task {
             await reloadCalendarAndReminderLists()
         }
@@ -39,6 +42,7 @@ class CalendarManager: ObservableObject {
         if let observer = eventStoreChangedObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        nextEventUpdateTimer?.invalidate()
     }
 
     private func setupEventStoreChangedObserver() {
@@ -50,6 +54,13 @@ class CalendarManager: ObservableObject {
             Task {
                 await self?.reloadCalendarAndReminderLists()
             }
+        }
+    }
+
+    private func setupNextEventUpdateTimer() {
+        // Update next event every minute to handle events that have started
+        nextEventUpdateTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.updateNextUpcomingEvent()
         }
     }
 
@@ -82,6 +93,7 @@ class CalendarManager: ObservableObject {
                     from: currentWeekStartDate,
                     to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
                     calendars: selectedCalendars.map { $0.id })
+                updateNextUpcomingEvent()
             }
         case .restricted, .denied:
             NSLog("Calendar access denied or restricted")
@@ -92,6 +104,7 @@ class CalendarManager: ObservableObject {
                 from: currentWeekStartDate,
                 to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
                 calendars: selectedCalendars.map { $0.id })
+            updateNextUpcomingEvent()
         case .writeOnly:
             NSLog("Write only")
         @unknown default:
@@ -186,6 +199,30 @@ class CalendarManager: ObservableObject {
             calendars: calendarIDs
         )
         self.events = eventsResult
+        updateNextUpcomingEvent()
+    }
+
+    private func updateNextUpcomingEvent() {
+        let now = Date.now
+        let calendar = Calendar.current
+
+        // Get all events happening today that haven't started yet
+        let upcomingToday = events.filter { event in
+            calendar.isDateInToday(event.start) && event.start >= now
+        }
+
+        // Filter out completed reminders
+        let filteredUpcoming = upcomingToday.filter { event in
+            if event.type.isReminder {
+                if case .reminder(let completed) = event.type {
+                    return !completed || !Defaults[.hideCompletedReminders]
+                }
+            }
+            return true
+        }
+
+        // Get the next one (earliest start time)
+        nextUpcomingEvent = filteredUpcoming.sorted { $0.start < $1.start }.first
     }
     
     func setReminderCompleted(reminderID: String, completed: Bool) async {
@@ -195,5 +232,6 @@ class CalendarManager: ObservableObject {
             from: currentWeekStartDate,
             to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
             calendars: selectedCalendars.map { $0.id })
+        updateNextUpcomingEvent()
     }
 }

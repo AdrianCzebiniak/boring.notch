@@ -111,13 +111,22 @@ struct ContentView: View {
                                 isHovering = hovering
                             }
 
-                            // Only close if mouse leaves and the notch is open
-                            if !hovering && vm.notchState == .open {
+                            // If hovering over peek, open it
+                            if hovering && vm.notchState == .peek {
+                                doOpen()
+                            }
+
+                            // Only close if mouse leaves and the notch is open/peek
+                            if !hovering && (vm.notchState == .open || vm.notchState == .peek) {
                                 vm.close()
                             }
                         }
                         .onTapGesture {
-                            doOpen()
+                            if vm.notchState == .peek {
+                                doOpen()
+                            } else if vm.notchState == .closed {
+                                doOpen()
+                            }
                         }
                         .conditionalModifier(Defaults[.enableGestures]) { view in
                             view
@@ -234,9 +243,11 @@ struct ContentView: View {
                               .transition(.opacity)
                       } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
                           MusicLiveActivity()
+                      } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && CalendarManager.shared.nextUpcomingEvent != nil && Defaults[.showNextEventInNotch] && !vm.hideOnClosed {
+                          NextEventView()
                       } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace] && !vm.hideOnClosed  {
                           BoringFaceAnimation().animation(.interactiveSpring, value: musicManager.isPlayerIdle)
-                      } else if vm.notchState == .open {
+                      } else if vm.notchState == .open || vm.notchState == .peek {
                           BoringHeader()
                               .frame(height: max(24, vm.effectiveClosedNotchHeight))
                               .blur(radius: abs(gestureProgress) > 0.3 ? min(abs(gestureProgress), 8) : 0)
@@ -290,6 +301,12 @@ struct ContentView: View {
             .allowsHitTesting(vm.notchState == .open)
             .blur(radius: abs(gestureProgress) > 0.3 ? min(abs(gestureProgress), 8) : 0)
             .opacity(abs(gestureProgress) > 0.3 ? min(abs(gestureProgress * 2), 0.8) : 1)
+        }
+        .overlay(alignment: .top) {
+            if vm.notchState == .closed && !coordinator.firstLaunch {
+                DesktopNameView()
+                    .padding(.top, 2)
+            }
         }
     }
 
@@ -473,7 +490,13 @@ struct ContentView: View {
                 return
             }
 
-            // Delay opening the notch
+            // If in peek state, immediately open to full
+            if vm.notchState == .peek {
+                doOpen()
+                return
+            }
+
+            // Delay opening the notch from closed state
             let task = DispatchWorkItem {
                 // ContentView is a struct, so we don't use weak self here
                 guard vm.notchState == .closed, isHovering else { return }
@@ -495,8 +518,8 @@ struct ContentView: View {
                     isHovering = false
                 }
 
-                // Close the notch if it's open and battery popover is not active
-                if vm.notchState == .open && !vm.isBatteryPopoverActive {
+                // Close the notch if it's open/peek and battery popover is not active
+                if (vm.notchState == .open || vm.notchState == .peek) && !vm.isBatteryPopoverActive {
                     vm.close()
                 }
             }

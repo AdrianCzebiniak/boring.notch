@@ -40,6 +40,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Calendar") {
                     Label("Calendar", systemImage: "calendar")
                 }
+                NavigationLink(value: "Desktops") {
+                    Label("Desktops", systemImage: "macwindow.on.rectangle")
+                }
                 if extensionManager.installedExtensions
                     .contains(where: { $0.bundleIdentifier == hudExtension })
                 {
@@ -84,6 +87,8 @@ struct SettingsView: View {
                     Media()
                 case "Calendar":
                     CalendarSettings()
+                case "Desktops":
+                    DesktopSettings()
                 case "HUD":
                     HUD()
                 case "Battery":
@@ -584,6 +589,8 @@ struct CalendarSettings: View {
     var body: some View {
         Form {
             Defaults.Toggle("Show calendar", key: .showCalendar)
+            Defaults.Toggle("Show next event in notch", key: .showNextEventInNotch)
+                .help("Display the next upcoming event today in the notch when closed")
             Defaults.Toggle("Hide completed reminders", key: .hideCompletedReminders)
             Section(header: Text("Calendars")) {
                 if calendarManager.calendarAuthorizationStatus != .fullAccess {

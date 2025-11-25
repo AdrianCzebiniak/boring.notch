@@ -72,6 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var closeNotchWorkItem: DispatchWorkItem?
     private var previousScreens: [NSScreen]?
     private var onboardingWindowController: NSWindowController?
+    private var desktopAutoCloseWorkItem: DispatchWorkItem?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -94,6 +95,62 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.cleanupWindows()
             self?.adjustWindowPosition(changeAlpha: true)
         }
+    }
+
+    @objc func onDesktopChanged() {
+        print("🔴 DEBUG: onDesktopChanged called")
+        print("🔴 DEBUG: desktopNameAutoExpandOnNotch = \(Defaults[.desktopNameAutoExpandOnNotch])")
+        print("🔴 DEBUG: showDesktopName = \(Defaults[.showDesktopName])")
+
+        guard Defaults[.desktopNameAutoExpandOnNotch] && Defaults[.showDesktopName] else {
+            print("🔴 DEBUG: Guard failed - not expanding")
+            return
+        }
+
+        // Determine which screen(s) to expand
+        if Defaults[.showOnAllDisplays] {
+            print("🔴 DEBUG: showOnAllDisplays mode")
+            // Expand on all screens with notches
+            for (screen, viewModel) in viewModels {
+                let hasNotch = screen.safeAreaInsets.top > 0
+                print("🔴 DEBUG: Screen \(screen.localizedName) - hasNotch: \(hasNotch), notchState: \(viewModel.notchState)")
+                if hasNotch && viewModel.notchState == .closed {
+                    temporarilyExpandNotch(viewModel: viewModel)
+                }
+            }
+        } else {
+            print("🔴 DEBUG: Single screen mode")
+            if let screen = window?.screen {
+                let hasNotch = screen.safeAreaInsets.top > 0
+                print("🔴 DEBUG: Screen \(screen.localizedName) - hasNotch: \(hasNotch), notchState: \(vm.notchState)")
+                if hasNotch && vm.notchState == .closed {
+                    temporarilyExpandNotch(viewModel: vm)
+                }
+            } else {
+                print("🔴 DEBUG: No window screen found")
+            }
+        }
+    }
+
+    private func temporarilyExpandNotch(viewModel: BoringViewModel) {
+        // Cancel any existing auto-close work
+        desktopAutoCloseWorkItem?.cancel()
+
+        print("🔴 DEBUG: temporarilyExpandNotch called - triggering PEEK")
+
+        // Peek the notch (small expansion to show desktop name)
+        viewModel.peek()
+
+        print("🔴 DEBUG: After peek() - notchState = \(viewModel.notchState)")
+
+        // Schedule auto-close
+        let delay = Defaults[.desktopNameAutoHideDelay]
+        let workItem = DispatchWorkItem { [weak viewModel] in
+            print("🔴 DEBUG: Auto-closing peek after delay")
+            viewModel?.close()
+        }
+        desktopAutoCloseWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func cleanupWindows(shouldInvert: Bool = false) {
@@ -154,6 +211,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         coordinator.setupWorkersNotificationObservers()
 
+        // Initialize DesktopManager to start observing space changes
+        _ = DesktopManager.shared
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenConfigurationDidChange),
@@ -205,6 +265,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self, selector: #selector(onScreenUnlocked(_:)),
             name: NSNotification.Name(rawValue: "com.apple.screenIsUnlocked"), object: nil)
 
+        // Observe desktop changes for auto-expand on notched screens
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onDesktopChanged),
+            name: .desktopDidChange,
+            object: nil
+        )
+
         KeyboardShortcuts.onKeyDown(for: .toggleSneakPeek) { [weak self] in
             guard let self = self else { return }
             self.coordinator.toggleSneakPeek(
@@ -245,7 +313,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.closeNotchWorkItem = workItem
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
-            case .open:
+            case .peek, .open:
                 viewModel.close()
             }
         }

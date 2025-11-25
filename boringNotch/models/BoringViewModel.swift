@@ -167,12 +167,23 @@ class BoringViewModel: NSObject, ObservableObject {
         return false
     }
 
+    func peek() {
+        withAnimation(.spring(duration: 0.3)) {
+            // Peek keeps same height as closed, but wider
+            self.notchSize = CGSize(
+                width: peekNotchSize.width,
+                height: closedNotchSize.height
+            )
+            self.notchState = .peek
+        }
+    }
+
     func open() {
         withAnimation(.bouncy) {
             self.notchSize = openNotchSize
             self.notchState = .open
         }
-        
+
         // Force music information update when notch is opened
         MusicManager.shared.forceUpdate()
     }

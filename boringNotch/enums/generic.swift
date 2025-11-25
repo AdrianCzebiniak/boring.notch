@@ -21,6 +21,7 @@ public enum ContentType: Int, Codable, Hashable, Equatable {
 
 public enum NotchState {
     case closed
+    case peek
     case open
 }
 
